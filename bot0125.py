@@ -1,14 +1,11 @@
-import json
+import os
 import logging
+import json
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from dotenv import load_dotenv
-import os
-
-load_dotenv()  # Загружаем переменные из .env
-
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from flask import Flask, request
+from telegram import Update,InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -17,6 +14,12 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from dotenv import load_dotenv
+
+load_dotenv()  # Загружаем переменные окружения
+
+# Инициализация Flask-приложения
+app = Flask(__name__)
 
 # Настройка логирования
 logging.basicConfig(
@@ -32,7 +35,8 @@ ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
 email = os.getenv('EMAIL')
 password = os.getenv('EMAIL_PASSWORD')  # Пароль приложения от Google
 recipient = email  # Email для получения заказа
-token = os.getenv('TELEGRAM_TOKEN')
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+WEBHOOK_URL = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook"
 recipient = email  # Email для получения заказа
 
 
@@ -474,20 +478,42 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
 
-# Основной запуск бота
-def main():
-    """Основная функция запуска бота."""
-    load_subscribers()  # Загружаем список подписчиков при старте бота
-    token = os.getenv('TELEGRAM_TOKEN')
-    application = Application.builder().token(token).build()
+# Инициализация приложения Telegram Bot
+application = Application.builder().token(TOKEN).build()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+# Регистрируем обработчики
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(button_handler))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
-    application.run_polling()
+# Маршрут для обработки вебхуков
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    """Обработка входящих обновлений от Telegram."""
+    data = request.json
+    update = Update.de_json(data, application.bot)
+    application.update_queue.put_nowait(update)
+    return "OK", 200
 
+# Маршрут для установки вебхука
+@app.route('/set_webhook', methods=['GET'])
+def set_webhook():
+    """Устанавливает вебхук для бота."""
+    response = application.bot.set_webhook(WEBHOOK_URL)
+    if response:
+        return f"Webhook установлен: {WEBHOOK_URL}", 200
+    return "Не удалось установить webhook", 400
 
+# Маршрут для проверки работоспособности
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Проверка работоспособности приложения."""
+    return "OK", 200
+
+# Основной запуск приложения
 if __name__ == "__main__":
-    main()
+    load_subscribers()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+
 
