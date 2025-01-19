@@ -20,12 +20,30 @@ load_dotenv()  # Загружаем переменные окружения
 
 # Инициализация Flask-приложения
 app = Flask(__name__)
+@app.route('/')
+def home():
+    return "Бот работает!"
+@app.route('/env', methods=['GET'])
+def check_env():
+    """Отладочный маршрут для проверки переменных окружения."""
+    return {
+        "EMAIL": os.getenv('EMAIL'),
+        "EMAIL_PASSWORD": os.getenv('EMAIL_PASSWORD'),
+        "TELEGRAM_TOKEN": os.getenv('TELEGRAM_TOKEN')
+    }, 200
 
 # Настройка логирования
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Логирование значений переменных окружения
+logging.info(f"EMAIL: {os.getenv('EMAIL')}")
+logging.info(f"TELEGRAM_TOKEN: {os.getenv('TELEGRAM_TOKEN')}")
+
 
 # Список ID подписчиков
 subscribers = []
